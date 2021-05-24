@@ -1,5 +1,5 @@
 '''
-NetPyNE version of Potjans and Diesmann thalamocortical network
+NetPyNE version of Potjans and Diesmann thalamocortical network with multicompartment neurons
 
 netParams.py -- contains the network parameters (netParams object)
 
@@ -18,12 +18,13 @@ from cfg import cfg
 
 # Reescaling function (move to separate module?)
 def Reescale(ScaleFactor, C, N_Full, w_p, f_ext, tau_syn, Inp, InpDC):
-	if ScaleFactor<1.0: 
+	if ScaleFactor<1.0 : 
 
 		# This is a good approximation of the F_out param for the Balanced option "True".
 		# Note for the Balanced=False option, it should be possible to calculate a better approximation.
 		F_out=np.array([0.860, 2.600, 4.306, 5.396, 8.142, 8.188, 0.941, 7.3]) 
 		
+		#Para a nao balanceada o F_out deve ser outro. O nao balanceado. Apos corrigir conexoes testar para caso so de aleracao no InpPoiss
 		Ncon=np.vstack(np.column_stack(0 for i in range(0,8)) for i in range(0,8))
 		for r in range(0,8): 
 			for c in range(0,8): 
@@ -39,7 +40,7 @@ def Reescale(ScaleFactor, C, N_Full, w_p, f_ext, tau_syn, Inp, InpDC):
 		I_ext = 0.001 * tau_syn * (
 		        (1. - np.sqrt(ScaleFactor)) * x1_sum + 
 		        (1. - np.sqrt(ScaleFactor)) * x1_ext)
-				        
+
 		InpDC=np.sqrt(ScaleFactor)*InpDC*w_p*f_ext*tau_syn*0.001 #pA
 		w_p=w_p/np.sqrt(ScaleFactor) #pA
 		InpDC=InpDC+I_ext
@@ -127,6 +128,8 @@ netParams.delayMin_i = 0.75
 netParams.weightMin = w_p
 netParams.dweight = 0.1
 
+netParams.scaleConnWeight = cfg.scaleConnWeight
+
 ############################################################
 # Populations parameters
 ############################################################
@@ -142,10 +145,20 @@ popDepths = [[0.08, 0.27], [0.08, 0.27], [0.27, 0.58], [0.27, 0.58], [0.58, 0.73
 
 # create populations
 for i in range(0,8):
-	netParams.popParams[L[i]] = {'cellType': str(L[i]), 'numCells': int(N_[i]), 'cellModel': 'IntFire_PD', 'm':0, 'Iext':float(InpDC[i]), 'ynormRange': popDepths[i] }
+	netParams.popParams[L[i]] = {'cellType': 'MC', 'numCells': int(N_[i]), 'ynormRange': popDepths[i] }
 
-# To atualization of Point Neurons
-netParams.popParams['bkg_IF'] = {'numCells': 1, 'cellModel': 'NetStim','rate': 40000,  'start':0.0, 'noise': 0.0, 'delay':0}
+
+############################################################
+## Cell parameters
+############################################################
+netParams.loadCellParams(label='MC', fileName='cells/CSTR_cellParams.json')
+
+
+############################################################
+## Synaptic mechanism parameters
+############################################################
+netParams.synMechParams['exc'] = {'mod': 'Exp2Syn', 'tau1': 0.8, 'tau2': 5.3, 'e': 0}  # NMDA synaptic mechanism
+netParams.synMechParams['inh'] = {'mod': 'Exp2Syn', 'tau1': 0.6, 'tau2': 8.5, 'e': -75}  # GABA synaptic mechanism
 
 
 ############################################################
@@ -184,7 +197,8 @@ if cfg.TH == True:
 			'preConds': {'pop': 'bkg_TH'+str(L[r])},  
 			'postConds': {'pop': L[r]},
 			'connList': auxConn.T,   
-			'weight':'max(0, weightMin +normal(0,dweight*weightMin))',  
+			'weight':'max(0, weightMin +normal(0,dweight*weightMin))', 
+			'synMech': 'exc', 
 			'delay': 0.5} # 1 delay
 
 
@@ -202,6 +216,7 @@ for r in range(0,8):
 					'divergence': cfg.ScaleFactor*(np.log(1.-C[r][c])/np.log(1. -1./(N_Full[r]*N_Full[c])) ) /N_Full[c],
         			'weight':'2*max(0, weightMin +normal(0,dweight*weightMin))', # synaptic weight
         			'delay':'max(0.1, delayMin_e +normal(0,ddelay*delayMin_e))',  # transmission delay (ms)
+					'synMech': 'exc'
         			}
 			else:
 				netParams.connParams[str(L[c])+'->'+str(L[r])] = { 
@@ -210,35 +225,15 @@ for r in range(0,8):
         			'divergence': cfg.ScaleFactor*(np.log(1.-C[r][c])/np.log(1. -1./(N_Full[r]*N_Full[c])) ) /N_Full[c],
         			'weight':'max(0, weightMin +normal(0,dweight*weightMin))', # synaptic weight
         			'delay':'max(0.1, delayMin_e +normal(0,ddelay*delayMin_e))',  # transmission delay (ms)
+					'synMech': 'exc'
         			}                                                # synaptic mechanism
 		else:
 			netParams.connParams[str(L[c])+'->'+str(L[r])] = { 
         		'preConds': {'pop': L[c]},                         # conditions of presyn cells
         		'postConds': {'pop': L[r]},                        # conditions of postsyn cells
         		'divergence': cfg.ScaleFactor*(np.log(1.-C[r][c])/np.log(1. -1./(N_Full[r]*N_Full[c])) ) /N_Full[c],
-        		'weight':'-4*max(0, weightMin +normal(0,dweight*weightMin))', # synaptic weight
+        		'weight':'4*max(0, weightMin +normal(0,dweight*weightMin))', # synaptic weight
         		'delay':'max(0.1, delayMin_i +normal(0,ddelay*delayMin_i))',  # transmission delay (ms)
+				'synMech': 'inh'
         		}                                                  # synaptic mechanism
-        
-netParams.connParams['S2->M'] = {
-	'preConds': {'pop': 'bkg_IF'}, 
-	'postConds': {'cellModel': 'IntFire_PD'},
-	'probability': 1, 
-	'weight': 0,	
-	'delay': 0.5}   
-
-
-############################################################
-# Update cfg plotting options based on network rescaling
-############################################################
-
-# raster 10% of cells
-scale = 10 #max(1,int(41.444*cfg.ScaleFactor))
-include = [(pop, list(range(0, netParams.popParams[pop]['numCells'], scale))) for pop in L]
-cfg.analysis['plotRaster']['include'] = include
-
-# plot statistics for 10% of cells
-scale = 10 #max(1,int(sum(N_[:8])/1000))
-include = [(pop, range(0, netParams.popParams[pop]['numCells'], scale)) for pop in L]
-cfg.analysis['plotSpikeStats']['include'] = include
 

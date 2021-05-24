@@ -21,12 +21,13 @@ cfg = specs.SimConfig() # object of class SimConfig to store simulation configur
 ############################################################
 
 cfg.seeds['stim']=3
-cfg.duration = 1*1e3 #6*1e2   # Duration of the simulation, in ms
+cfg.duration = 2*1e2   # Duration of the simulation, in ms
 cfg.dt = 0.025          # Internal integration timestep to use
 cfg.verbose = 0     # Show detailed messages
 cfg.seeds['m'] = 123
 cfg.printPopAvgRates = True
 cfg.printRunTime = 1
+cfg.hParams['celsius'] = 34
 
 ### Options to save memory in large-scale ismulations
 cfg.gatherOnlySimData = False  #Original
@@ -48,7 +49,7 @@ cfg.createPyStruct = True
 # DC=False ; TH=True;  Balanced=True   => Figure 10A. But I want a partial reproduce so I guess Figure 10C is not necessary
 
 # Size of Network. Adjust this constants, please!
-cfg.ScaleFactor = 0.10  # 1.0 = 80.000 
+cfg.ScaleFactor = 0.01  # 1.0 = 80.000 
 
 # External input DC or Poisson
 cfg.DC = False #True = DC // False = Poisson
@@ -57,9 +58,12 @@ cfg.DC = False #True = DC // False = Poisson
 cfg.TH = False #True = on // False = off
 
 # Balanced and Unbalanced external input as PD article
-cfg.Balanced = False #True=Balanced // False=Unbalanced
+cfg.Balanced = True #True=Balanced // False=Unbalanced
 
-cfg.simLabel = 'pd_scale-%s_DC-%d_TH-%d_Balanced-%d_dur-%d'%(str(cfg.ScaleFactor), int(cfg.DC), int(cfg.TH), int(cfg.Balanced), int(cfg.duration/1e3))
+# Scaling factor for weights when replacing point neurons with multicompartment neurons
+cfg.scaleConnWeight = 0.000001
+
+cfg.simLabel = 'pd_mc_scale-%s_DC-%d_TH-%d_Balanced-%d_dur-%d_wscale_%.6g'%(str(cfg.ScaleFactor), int(cfg.DC), int(cfg.TH), int(cfg.Balanced), int(cfg.duration/1e3), cfg.scaleConnWeight)
 
 ###########################################################
 # Recording and plotting options
@@ -74,18 +78,31 @@ cfg.recordStim = False
 cfg.printSynsAfterRule = False
 cfg.recordCellsSpikes = ['L2e', 'L2i', 'L4e', 'L4i', 'L5e', 'L5i','L6e', 'L6i'] # record only spikes of cells (not ext stims)
 
-# raster plot (include update in netParams.py)
-cfg.analysis['plotRaster']={'include': [], 'timeRange': [100,600], 'popRates' : False, 'figSize' : (6,7),  
-	'labels':'overlay', 'orderInverse': True, 'fontSize':16, 'showFig':False, 'saveFig': True}
+cfg.recordLFP = [[150, y, 150] for y in range(0, 1500, 100)]
 
-# statistics plot (include update in netParams.py)
-cfg.analysis['plotSpikeStats'] = {'include' : [], 'stats' : ['rate'], 'legendLabels':cfg.recordCellsSpikes,
-	'timeRange' : [100,600], 'fontSize': 16, 'figSize': (6,9),'showFig':False, 'saveFig': True}
+# # raster plot 
+# cfg.analysis['plotRaster'] = {'include': cfg.recordCellsSpikes, 'timeRange': [100,600], 'popRates' : False, 'figSize' : (6,12),  
+# 	'labels':'overlay', 'orderInverse': True, 'fontSize': 16, 'dpi': 300, 'showFig': False, 'saveFig': True}
 
-## Additional NetPyNE analysis
-# plot traces
-#cfg.recordTraces = {'m': {'var': 'm', 'conds':{'pop': ['L2e', 'L2i']}}}
-#cfg.analysis['plotTraces'] = {'include':[('L2e', [0, 1, 2, 3]),('L2i', [0, 1])], 'timeRange': [0,100],'overlay': True,'oneFigPer': 'trace', 'showFig':False, 'saveFig': 'traceEscala3'+str(ScaleFactor)+'.png'}
+# # statistics plot (include update in netParams.py)
+# cfg.analysis['plotSpikeStats'] = {'include': cfg.recordCellsSpikes, 'stats' : ['rate'], 'xlim': [0,15], 'legendLabels': cfg.recordCellsSpikes,
+# 	'timeRange' : [100,600], 'fontSize': 20, 'dpi': 300, 'figSize': (3,12),'showFig':False, 'saveFig': True}
+
+# # # plot traces
+# cfg.recordTraces = {'V_soma': {'sec':'soma','loc':0.5, 'var':'v'}}
+
+# cfg.analysis['plotTraces'] = {'include': [('L2e', 0),('L2i', 0), ('L4e', 0),('L4i', 0), ('L5e', 0), ('L5i', 0), ('L6e', 0), ('L6i', 0)], 
+# 							'timeRange': [100,600], 'figSize': (6,3), 'legend': False, 'fontSize': 16, 'overlay': True, 'axis': False, 'oneFigPer': 'trace', 'showFig': False, 'saveFig': True}
+
+# cfg.analysis['plotLFP'] = {'plots': ['timeSeries'], 'electrodes': range(15), 'timeRange': [100,600], 'fontSize': 20, 'maxFreq':80, 'figSize': (6,12), 'dpi': 300, 'saveData': False, 'saveFig': True, 'showFig': False}
+
+layer_bounds = {'L1': 0.08*1470, 'L2': 0.27*1470, 'L4': 0.58*1470, 'L5': 0.73*1470, 'L6': 1.0*1470}
+
+cfg.analysis['plotCSD'] = {'spacing_um': 100, 'overlay': 'CSD_bandpassed',  'timeRange': [100,200], 'saveFig': True, 'figSize': (3,12), 'fontSize': 16, 'dpi': 300, 'layer_lines': 1, 'layer_bounds': layer_bounds, 'showFig': 0} 
+
+
+# cfg.analysis['plotShape'] = {'includePost': cfg.recordCellsSpikes, 'includeAxon': 1, 'cvar': 'voltage', 'fontSize': 16, 'figSize': (12,8), 
+#							'axis': 'on', 'axisLabels': False, 'saveFig': True, 'dpi': 300, 'dist': 0.65}
 
 # plot 2D net structure
 # cfg.analysis['plot2Dnet'] = {'include': cfg.recordCellsSpikes, 'saveFig': True,  'figSize': (10,15)}
