@@ -1,4 +1,4 @@
-# NetPyNE implementation of the Potjans and Diesmann Cortical Microcircuit model with scaling option
+# NetPyNE implementation of the Potjans and Diesmann cortical microcircuit (PDCM) model with scaling option
 
 This code reproduces the simulations for the following paper:
 
